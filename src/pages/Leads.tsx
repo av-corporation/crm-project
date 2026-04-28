@@ -479,6 +479,15 @@ const Leads: React.FC = () => {
     return STATUS_COLORS_MAP[status.color] || STATUS_COLORS_MAP['slate'];
   };
 
+  const getSaaSStatusBadgeClass = (statusLabel: string) => {
+    const normalized = (statusLabel || '').toLowerCase();
+    if (normalized.includes('new')) return 'bg-blue-50 text-blue-700 border-blue-200';
+    if (normalized.includes('contact')) return 'bg-orange-50 text-orange-700 border-orange-200';
+    if (normalized.includes('qualif')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (normalized.includes('convert')) return 'bg-purple-50 text-purple-700 border-purple-200';
+    return 'bg-slate-100 text-slate-700 border-slate-200';
+  };
+
   const ALLOWED_STATUSES = (statuses || []).map(s => s.label);
   const KANBAN_STATUSES = statuses || [];
 
@@ -1223,31 +1232,61 @@ const Leads: React.FC = () => {
 
   const stats = {
     total: (leads || []).length,
-    todayFollowUps: (leads || []).filter(l => {
-      if (!l.followUpDate) return false;
-      try {
-        const d = parseISO(l.followUpDate);
-        return !isNaN(d.getTime()) && isToday(d);
-      } catch (e) { return false; }
+    newLeads: (leads || []).filter((l) => (l.status || '').toLowerCase().includes('new')).length,
+    contacted: (leads || []).filter((l) => (l.status || '').toLowerCase().includes('contact')).length,
+    converted: (leads || []).filter((l) => {
+      const s = (l.status || '').toLowerCase();
+      return s.includes('converted') || s.includes('won') || s.includes('deal done');
     }).length,
-    dealsClosed: (leads || []).filter(l => l.status === 'Won' || l.status === 'Deal Done').length,
-    conversionRate: (leads || []).length > 0 
-      ? (((leads || []).filter(l => l.status === 'Won' || l.status === 'Deal Done').length / (leads || []).length) * 100).toFixed(2)
-      : '0.00'
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-12">
+    <div className="space-y-8 animate-in fade-in duration-700 pb-12 font-sans">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm px-5 py-4 flex flex-col xl:flex-row gap-4 xl:items-center xl:justify-between">
+        <div className="relative flex-1 min-w-[280px] max-w-2xl">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            placeholder="Search leads, contacts, accounts..."
+            className="h-11 pl-11 rounded-xl border-slate-200 bg-slate-50 text-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="icon" className="relative h-10 w-10 rounded-xl border-slate-200">
+            <Bell className="w-4 h-4 text-slate-600" />
+            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">3</span>
+          </Button>
+          <div className="flex items-center gap-2 border border-slate-200 bg-slate-50 rounded-xl px-3 py-1.5">
+            <Avatar className="w-8 h-8">
+              <AvatarFallback className="bg-indigo-100 text-indigo-700 text-xs font-bold">
+                {(profile?.name || 'U').slice(0, 1).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="leading-tight">
+              <p className="text-xs font-bold text-slate-800">{profile?.name || 'User'}</p>
+              <p className="text-[10px] text-slate-500 uppercase">{profile?.role || 'user'}</p>
+            </div>
+          </div>
+          <Button
+            onClick={() => setIsAddDialogOpen(true)}
+            className="h-10 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+          >
+            <Plus className="w-4 h-4 mr-1" /> Quick Add
+          </Button>
+        </div>
+      </div>
+
       {/* 4 Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5 flex items-center gap-5 group transition-all hover:shadow-md">
-          <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-500/10 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-5 group transition-all hover:shadow-md">
+          <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600">
             <Target className="w-6 h-6" />
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">Total Leads</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-slate-900 dark:text-white leading-tight">{stats.total}</span>
+              <span className="text-2xl font-extrabold text-slate-900 leading-tight">{stats.total}</span>
               <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center">
                 <ChevronUp className="w-3 h-3" /> 12%
               </span>
@@ -1256,48 +1295,48 @@ const Leads: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5 flex items-center gap-5 group transition-all hover:shadow-md">
-          <div className="w-12 h-12 bg-amber-50 dark:bg-amber-500/10 rounded-full flex items-center justify-center text-amber-600 dark:text-amber-400">
-            <Clock className="w-6 h-6" />
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-5 group transition-all hover:shadow-md">
+          <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
+            <Sparkles className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">Today Follow-ups</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">New Leads</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-slate-900 dark:text-white leading-tight">{stats.todayFollowUps}</span>
+              <span className="text-2xl font-extrabold text-slate-900 leading-tight">{stats.newLeads}</span>
               <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center">
-                <ChevronUp className="w-3 h-3" /> 8%
+                <ChevronUp className="w-3 h-3" /> 9%
               </span>
             </div>
             <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">this month</p>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5 flex items-center gap-5 group transition-all hover:shadow-md">
-          <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-            <Zap className="w-6 h-6" />
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-5 group transition-all hover:shadow-md">
+          <div className="w-12 h-12 bg-orange-50 rounded-full flex items-center justify-center text-orange-600">
+            <Phone className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">Won Deals</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">Contacted</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-slate-900 dark:text-white leading-tight">{stats.dealsClosed}</span>
+              <span className="text-2xl font-extrabold text-slate-900 leading-tight">{stats.contacted}</span>
               <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center">
-                <ChevronUp className="w-3 h-3" /> 15%
+                <ChevronUp className="w-3 h-3" /> 11%
               </span>
             </div>
             <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">this month</p>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5 flex items-center gap-5 group transition-all hover:shadow-md">
-          <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-500/10 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-5 group transition-all hover:shadow-md">
+          <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center text-purple-600">
             <TrendingUp className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">Conversion Rate</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">Converted</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-slate-900 dark:text-white leading-tight">{stats.conversionRate}%</span>
+              <span className="text-2xl font-extrabold text-slate-900 leading-tight">{stats.converted}</span>
               <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center">
-                <ChevronUp className="w-3 h-3" /> 5%
+                <ChevronUp className="w-3 h-3" /> 6%
               </span>
             </div>
             <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">this month</p>
@@ -1948,10 +1987,10 @@ const Leads: React.FC = () => {
 
       {viewMode === 'list' ? (
         <div className="space-y-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800">
+                <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
                     <th className="p-4 w-12">
                       <div className={cn(
@@ -1961,14 +2000,15 @@ const Leads: React.FC = () => {
                         {selectedLeadIds.length === (filteredLeads || []).length && (filteredLeads || []).length > 0 && <Check className="w-3.5 h-3.5 text-white" />}
                       </div>
                     </th>
-                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[220px]">Profile</th>
-                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[180px]">Contact</th>
-                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[140px]">Location</th>
-                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[160px]">Requirement</th>
-                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[140px]">Status</th>
+                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[220px]">Lead Name</th>
+                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[160px]">Company</th>
+                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[180px]">Email</th>
+                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[140px]">Phone</th>
                     <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[120px]">Source</th>
-                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[140px]">Assigned</th>
-                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] text-right">Actions</th>
+                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[140px]">Status</th>
+                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[140px]">Assigned To</th>
+                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] min-w-[130px]">Created On</th>
+                    <th className="p-4 font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
@@ -1989,7 +2029,7 @@ const Leads: React.FC = () => {
                       return (
                       <tr 
                         key={lead.id} 
-                        className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all cursor-pointer border-b border-slate-50 dark:border-slate-800 last:border-0"
+                        className="group hover:bg-slate-50 transition-all cursor-pointer border-b border-slate-100 last:border-0"
                         onClick={() => {
                           setSelectedLead(lead);
                           setIsDetailsOpen(true);
@@ -1998,129 +2038,93 @@ const Leads: React.FC = () => {
                         <td className="p-4" onClick={(e) => e.stopPropagation()}>
                           <div className={cn(
                             "w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer shadow-sm",
-                            selectedLeadIds.includes(lead.id) ? "bg-indigo-600 border-indigo-600" : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                            selectedLeadIds.includes(lead.id) ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"
                           )} onClick={() => handleToggleSelectLead(lead.id)}>
                             {selectedLeadIds.includes(lead.id) && <Check className="w-3.5 h-3.5 text-white" />}
                           </div>
                         </td>
                         <td className="p-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
-                            <Avatar className="w-10 h-10 border-2 border-white dark:border-slate-800 shadow-sm shrink-0">
-                              <AvatarFallback className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 font-bold text-[13px]">
+                              <Avatar className="w-10 h-10 border-2 border-white shadow-sm shrink-0">
+                              <AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold text-[13px]">
                                 {(String(primaryName || '??')).split(' ').filter(Boolean).map(n => n[0] || '').join('').slice(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex flex-col min-w-0">
-                              <span className="font-extrabold text-slate-900 dark:text-white text-sm tracking-tight truncate max-w-[200px]">{primaryName}</span>
+                              <span className="font-extrabold text-slate-900 text-sm tracking-tight truncate max-w-[200px]">{lead.name || 'No Name'}</span>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <Badge variant="outline" className={cn(
                                   "text-[9px] px-1.5 py-0 h-4 font-black uppercase tracking-widest w-fit border-none",
                                   isCompany 
                                     ? "bg-indigo-600 text-white shadow-indigo-600/10"
-                                    : "bg-slate-100 text-slate-500 shadow-none dark:bg-slate-800 dark:text-slate-400"
+                                    : "bg-slate-100 text-slate-500 shadow-none"
                                 )}>
                                   {isCompany ? 'COMPANY' : 'INDIVIDUAL'}
                                 </Badge>
-                                {isCompany && lead.name && (
-                                  <span className="text-[10px] font-bold text-slate-400 truncate max-w-[120px]">{lead.name}</span>
-                                )}
                               </div>
                             </div>
                           </div>
                         </td>
                         <td className="p-4 whitespace-nowrap">
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-1.5 text-[12px] font-bold text-slate-800 dark:text-slate-200">
-                               <Phone className="w-3.5 h-3.5 text-slate-300" /> {lead.phone || 'N/A'}
-                            </div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold tracking-tight">
-                               <Mail className="w-3.5 h-3.5 text-slate-300" /> {lead.email || 'N/A'}
-                            </div>
-                          </div>
+                          <span className="text-sm font-semibold text-slate-700">{lead.companyName || 'Individual'}</span>
                         </td>
                         <td className="p-4 whitespace-nowrap">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-bold text-slate-800 dark:text-slate-200 capitalize tracking-tight">{lead.city || 'N/A'}</span>
-                            <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">MAHARASHTRA</span>
-                          </div>
+                          <span className="text-sm font-semibold text-slate-700">{lead.email || 'N/A'}</span>
                         </td>
                         <td className="p-4 whitespace-nowrap">
-                           {lead.products && lead.products.length > 0 ? (
-                             <Badge className={cn(
-                               "text-[10px] font-bold px-3 py-1 rounded-full border shadow-sm truncate max-w-[180px] uppercase tracking-widest border-transparent",
-                               lead.products[0].name.toLowerCase().includes('deep') ? "bg-rose-500 text-white" :
-                               lead.products[0].name.toLowerCase().includes('sofa') ? "bg-indigo-500 text-white" :
-                               lead.products[0].name.toLowerCase().includes('carpet') ? "bg-amber-500 text-white" :
-                               lead.products[0].name.toLowerCase().includes('office') ? "bg-blue-500 text-white" :
-                               "bg-slate-700 text-white"
-                             )}>
-                               {lead.products[0].name}
-                             </Badge>
-                           ) : (
-                             <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">N/A Inquiry</span>
-                           )}
-                        </td>
-                        <td className="p-4 whitespace-nowrap" onClick={(e) => {e.stopPropagation();}}>
-                          <StatusSelector 
-                            selectedStatus={lead.status || 'New'} 
-                            onStatusChange={(newStatus) => updateLead(lead.id, { status: newStatus as LeadStatus })}
-                            statuses={statuses.length > 0 ? statuses : [
-                              { id: '1', label: 'New', color: 'blue', order: 1 },
-                              { id: '2', label: 'Contacted', color: 'indigo', order: 2 },
-                              { id: '3', label: 'Follow-up', color: 'amber', order: 3 },
-                              { id: '4', label: 'Qualified', color: 'emerald', order: 4 },
-                              { id: '5', label: 'Converted', color: 'green', order: 5 },
-                              { id: '6', label: 'Closed', color: 'slate', order: 6 },
-                            ]}
-                            size="sm"
-                            className="w-[120px] h-9"
-                          />
+                          <span className="text-sm font-semibold text-slate-700">{lead.phone || 'N/A'}</span>
                         </td>
                         <td className="p-4 whitespace-nowrap">
-                           <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded-md w-fit">
-                              <Globe className="w-3.5 h-3.5 text-indigo-500" /> {lead.source || 'INDIA MART'}
+                           <div className="inline-flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md w-fit">
+                              <Globe className="w-3.5 h-3.5 text-indigo-500" /> {lead.source || 'Website'}
                            </div>
                         </td>
                         <td className="p-4 whitespace-nowrap">
+                          <Badge className={cn("rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wide", getSaaSStatusBadgeClass(lead.status || 'New'))}>
+                            {lead.status || 'New'}
+                          </Badge>
+                        </td>
+                        <td className="p-4 whitespace-nowrap">
                           <div className="flex items-center gap-2.5">
-                            <Avatar className="w-8 h-8 border border-slate-100 dark:border-slate-800 shadow-sm">
-                              <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold text-[10px]">
+                            <Avatar className="w-8 h-8 border border-slate-100 shadow-sm">
+                              <AvatarFallback className="bg-slate-100 text-slate-500 font-bold text-[10px]">
                                 {getUserAvatar(lead.assignedTo, users)}
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex flex-col">
-                              <span className="text-[11px] font-black text-slate-900 dark:text-white tracking-tight leading-none">{(String(getUserName(lead.assignedTo, users) || 'Unassigned')).split(' ')[0]}</span>
+                              <span className="text-[11px] font-black text-slate-900 tracking-tight leading-none">{(String(getUserName(lead.assignedTo, users) || 'Unassigned')).split(' ')[0]}</span>
                               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">EXECUTIVE</span>
                             </div>
                           </div>
                         </td>
+                        <td className="p-4 whitespace-nowrap">
+                          <span className="text-xs font-semibold text-slate-600">
+                            {lead.createdAt ? format(parseISO(lead.createdAt), 'dd MMM yyyy') : 'N/A'}
+                          </span>
+                        </td>
                         <td className="p-4 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button 
-                              variant="outline" 
-                              size="icon" 
-                              className="w-8 h-8 rounded-lg border-slate-100 dark:border-slate-800 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 shadow-sm transition-all active:scale-95"
-                              onClick={() => window.open(`tel:${lead.phone || ''}`)}
-                            >
-                              <Phone className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="icon" 
-                              className="w-8 h-8 rounded-lg border-slate-100 dark:border-slate-800 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 shadow-sm transition-all active:scale-95"
-                              onClick={() => handleWhatsAppFollowUp(lead)}
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="w-8 h-8 rounded-lg text-slate-300 hover:text-slate-600 dark:hover:text-slate-400 hover:bg-slate-100 transition-all"
-                              onClick={() => { setSelectedLead(lead); setIsDetailsOpen(true); }}
-                            >
-                              <ChevronRight className="w-4 h-4" />
-                            </Button>
-                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger render={
+                              <Button variant="ghost" size="icon" className="w-8 h-8 rounded-lg hover:bg-slate-100">
+                                <MoreHorizontal className="w-4 h-4 text-slate-500" />
+                              </Button>
+                            } />
+                            <DropdownMenuContent align="end" className="rounded-xl w-44">
+                              <DropdownMenuItem onClick={() => { setSelectedLead(lead); setIsDetailsOpen(true); }}>View details</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => window.open(`tel:${lead.phone || ''}`)}>Call lead</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleWhatsAppFollowUp(lead)}>WhatsApp follow-up</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-rose-600"
+                                onClick={() => {
+                                  setLeadToDelete(lead.id);
+                                  setIsDeleteDialogOpen(true);
+                                }}
+                              >
+                                Delete lead
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                       </tr>
                     );
