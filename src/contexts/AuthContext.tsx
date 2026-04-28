@@ -259,6 +259,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           );
         }
 
+        console.log('[Auth] Firebase target project config', {
+          projectId: auth.app.options.projectId,
+          authDomain: auth.app.options.authDomain,
+          apiKeyPresent: !!auth.app.options.apiKey,
+        });
+
+        let signInMethods: string[] = [];
+        try {
+          signInMethods = await fetchSignInMethodsForEmail(auth, emailToUse);
+          console.log('[Auth] Available sign-in methods for email', {
+            email: emailToUse,
+            methods: signInMethods,
+          });
+        } catch (methodsError: any) {
+          console.warn('[Auth] Failed to fetch sign-in methods for email', {
+            email: emailToUse,
+            code: methodsError?.code,
+            message: methodsError?.message,
+          });
+        }
+
+        if (signInMethods.length === 0) {
+          clearTimeout(timeout);
+          return reject(
+            new Error(
+              `No Firebase Authentication account exists for "${emailToUse}" in project "${auth.app.options.projectId}".`,
+            ),
+          );
+        }
+
+        if (!signInMethods.includes('password')) {
+          clearTimeout(timeout);
+          return reject(
+            new Error(
+              `Email/Password login is not enabled for "${emailToUse}". Enabled methods: ${signInMethods.join(', ')}.`,
+            ),
+          );
+        }
+
+        // Clear stale auth state before a new sign-in attempt.
+        if (auth.currentUser) {
+          console.log('[Auth] Clearing existing auth session before login', {
+            uid: auth.currentUser.uid,
+            email: auth.currentUser.email,
+          });
+          await signOut(auth);
+        }
+
         // 1. Try Firebase Authentication
         try {
           console.log('[Auth] Firebase password auth request', {
@@ -332,7 +380,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else if (errorCode === 'auth/invalid-email') {
             return reject(new Error('This account has an invalid email format. Please contact admin.'));
           }
-          return reject(new Error('Authentication failed. Please try again.'));
+          return reject(
+            new Error(
+              `Authentication failed (${errorCode}): ${firebaseError?.message || 'Unknown Firebase error'}`,
+            ),
+          );
         }
       } catch (error: any) {
         console.error('[Auth] Global signIn error:', error);
