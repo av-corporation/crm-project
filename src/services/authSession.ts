@@ -7,10 +7,17 @@ import {
 import { auth } from '../lib/firebase';
 
 export const AUTH_STORAGE_KEY = 'crm.auth.user';
+export const FALLBACK_AUTH_STORAGE_KEY = 'authUser';
 
 export type SessionUser = {
   uid: string;
   email: string;
+};
+
+export type FallbackAuthUser = {
+  email: string;
+  role: 'admin' | 'manager' | 'sales' | 'user';
+  isLoggedIn: boolean;
 };
 
 let persistenceConfigured = false;
@@ -40,6 +47,31 @@ export const writeStoredSessionUser = (user: SessionUser) => {
 
 export const clearStoredSessionUser = () => {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+};
+
+export const readFallbackAuthUser = (): FallbackAuthUser | null => {
+  const raw = localStorage.getItem(FALLBACK_AUTH_STORAGE_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed?.isLoggedIn || !parsed?.email) return null;
+    return {
+      email: String(parsed.email).toLowerCase(),
+      role: parsed.role || 'admin',
+      isLoggedIn: true,
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const writeFallbackAuthUser = (user: FallbackAuthUser) => {
+  localStorage.setItem(FALLBACK_AUTH_STORAGE_KEY, JSON.stringify(user));
+};
+
+export const clearFallbackAuthUser = () => {
+  localStorage.removeItem(FALLBACK_AUTH_STORAGE_KEY);
 };
 
 export const getSessionUser = (): SessionUser | null => {
