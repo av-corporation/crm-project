@@ -705,34 +705,13 @@ const Leads: React.FC = () => {
     }
   };
 
-  const getLeadRequirementText = (lead: Lead) => {
-    const explicitRequirement = (lead as any)?.requirement || (lead as any)?.product;
-    if (explicitRequirement && String(explicitRequirement).trim()) return String(explicitRequirement).trim();
-    if (lead.products && lead.products.length > 0 && lead.products[0]?.name) return lead.products[0].name;
-    return 'your requirement';
-  };
-
   const handleEmail = (lead: Lead) => {
     if (!lead?.email) {
       toast.error('No email address provided');
       return;
     }
-
-    const safeName = (lead?.name || '').trim() || 'Customer';
-    const safeRequirement = getLeadRequirementText(lead);
-    const subject = 'Regarding Your Inquiry - A V Corporation';
-    const body = `Dear ${safeName},
-
-Thank you for reaching out to A V Corporation.
-We have received your requirement for ${safeRequirement}.
-
-Our team will connect with you shortly.
-
-Best Regards,
-A V Corporation`;
-
-    const mailtoUrl = `mailto:${lead.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(mailtoUrl, '_blank');
+    setSelectedLead(lead);
+    setIsEmailModalOpen(true);
   };
 
   const handleWhatsAppFollowUp = (lead: Lead) => {
@@ -741,19 +720,8 @@ A V Corporation`;
       return;
     }
 
-    const safeName = (lead?.name || '').trim() || 'Customer';
-    const safeRequirement = getLeadRequirementText(lead);
-    const cleanPhone = lead.phone.replace(/\D/g, '');
-    const message = `Hi ${safeName},
-Thank you for contacting A V Corporation.
-We have received your requirement for ${safeRequirement}.
-Our team will get back to you shortly.
-
-Regards,
-A V Corporation`;
-    const encodedMessage = encodeURIComponent(message);
-
-    window.open(`https://wa.me/${cleanPhone}?text=${encodedMessage}`, '_blank');
+    setSelectedLead(lead);
+    setIsWhatsAppModalOpen(true);
   };
 
   const handleCreateProduct = async () => {
@@ -2632,6 +2600,7 @@ A V Corporation`;
                   <Button
                     className="h-10 px-4 rounded-lg bg-[#25D366] hover:bg-[#1ebe57] text-white font-semibold text-[13px] gap-2 border-none shadow-sm shadow-emerald-500/20"
                     onClick={() => selectedLead && handleWhatsAppFollowUp(selectedLead)}
+                    disabled={!selectedLead?.phone}
                   >
                     <MessageCircle className="w-4 h-4" /> WhatsApp
                   </Button>
@@ -2639,6 +2608,7 @@ A V Corporation`;
                     variant="outline"
                     className="h-10 px-4 rounded-lg border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 font-semibold text-[13px] gap-2 shadow-sm"
                     onClick={() => selectedLead && handleEmail(selectedLead)}
+                    disabled={!selectedLead?.email}
                   >
                     <Mail className="w-4 h-4" /> Email
                   </Button>

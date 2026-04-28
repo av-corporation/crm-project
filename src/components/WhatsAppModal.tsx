@@ -19,46 +19,41 @@ interface WhatsAppModalProps {
   lead: Lead | null;
 }
 
+const WHATSAPP_TEMPLATE_STORAGE_KEY = 'crm.last.whatsapp.template';
+
 const WHATSAPP_TEMPLATES = [
   {
-    id: 'quotation',
-    name: 'Quotation Sent',
-    text: `Hello {{name}},
-We have shared the quotation with you. Kindly review it and let us know your valuable feedback.
-If you need any technical support, feel free to call us.
-Thank you,
-A V Corporation`
+    id: 'welcome',
+    name: 'Welcome Message',
+    preview: 'Thank you for contacting us.',
+    text: `Hi {{name}},
+Thank you for contacting A V Corporation.
+We have received your requirement for {{requirement}}.
+Our team will get back to you shortly.`
   },
   {
     id: 'follow-up',
-    name: 'Follow-up Reminder',
-    text: `Hello {{name}},
-Just following up regarding our previous discussion. Kindly let us know your update.
-Looking forward to your response.
-Thank you.`
+    name: 'Follow-up Message',
+    preview: 'Follow-up on earlier requirement.',
+    text: `Hi {{name}},
+Just following up regarding your requirement for {{requirement}}.
+Please let us know a convenient time to connect.`
   },
   {
-    id: 'meeting',
-    name: 'Meeting Request',
-    text: `Hello {{name}},
-We would like to schedule a quick meeting with you regarding your requirement.
-Please let us know a suitable time.
-Thank you.`
+    id: 'quotation',
+    name: 'Quotation Message',
+    preview: 'Quotation prepared and awaiting feedback.',
+    text: `Hi {{name}},
+We have prepared a quotation for your requirement: {{requirement}}.
+Please check and let us know your feedback.`
   },
   {
-    id: 'payment',
-    name: 'Payment Reminder',
-    text: `Hello {{name}},
-This is a gentle reminder regarding the pending payment.
-Kindly process the same at your earliest convenience.
-Thank you.`
-  },
-  {
-    id: 'inquiry',
-    name: 'General Inquiry',
-    text: `Hello {{name}},
-Thank you for your inquiry. Our team will get back to you shortly with complete details.
-Thank you.`
+    id: 'reminder',
+    name: 'Reminder Message',
+    preview: 'Gentle reminder for pending response.',
+    text: `Hi {{name}},
+This is a gentle reminder regarding your requirement.
+We are awaiting your response.`
   }
 ];
 
@@ -69,17 +64,25 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ isOpen, onClose, lead }) 
 
   useEffect(() => {
     if (isOpen && lead) {
-      // Default to first template
-      applyTemplate(WHATSAPP_TEMPLATES[0].id);
+      const lastTemplate = localStorage.getItem(WHATSAPP_TEMPLATE_STORAGE_KEY);
+      const validTemplate = WHATSAPP_TEMPLATES.find((t) => t.id === lastTemplate);
+      applyTemplate(validTemplate?.id || WHATSAPP_TEMPLATES[0].id);
     }
   }, [isOpen, lead]);
+
+  const getLeadRequirement = () => {
+    if (!lead) return 'your requirement';
+    const explicitRequirement = (lead as any)?.requirement || (lead as any)?.product;
+    if (explicitRequirement && String(explicitRequirement).trim()) return String(explicitRequirement).trim();
+    if (lead.products && lead.products.length > 0 && lead.products[0]?.name) return lead.products[0].name;
+    return 'your requirement';
+  };
 
   const replacePlaceholders = (text: string) => {
     if (!lead) return text;
     return text
-      .replace(/{{name}}/g, lead.name)
-      .replace(/{{company}}/g, lead.companyName || 'your company')
-      .replace(/{{product}}/g, lead.product || 'the requirement');
+      .replace(/{{name}}/g, (lead.name || '').trim() || 'Customer')
+      .replace(/{{requirement}}/g, getLeadRequirement());
   };
 
   const applyTemplate = (templateId: string) => {
@@ -87,14 +90,21 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ isOpen, onClose, lead }) 
     if (template) {
       setSelectedTemplate(templateId);
       setMessage(replacePlaceholders(template.text));
+      localStorage.setItem(WHATSAPP_TEMPLATE_STORAGE_KEY, templateId);
     }
   };
 
   const handleSend = () => {
     if (!lead) return;
     
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/${lead.phone.replace(/\D/g, '')}?text=${encodedMessage}`;
+    const cleanPhone = lead.phone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      toast.error('Lead does not have a valid phone number');
+      return;
+    }
+
+    const encodedMessage = encodeURIComponent(message || 'Hi Customer,');
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
     window.open(whatsappUrl, '_blank');
     toast.success('Opening WhatsApp...');
     onClose();
@@ -143,6 +153,7 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ isOpen, onClose, lead }) 
                   )}>
                     {template.name}
                   </p>
+                  <p className="text-[10px] mt-1 text-slate-500 line-clamp-2">{template.preview}</p>
                 </button>
               ))}
             </div>
@@ -180,6 +191,7 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ isOpen, onClose, lead }) 
           </Button>
           <Button 
             onClick={handleSend} 
+            disabled={!lead?.phone}
             className="bg-green-600 hover:bg-green-700 text-white rounded-2xl px-10 h-12 font-black text-xs uppercase tracking-widest shadow-xl shadow-green-600/20 transition-all active:scale-[0.98] flex items-center gap-3"
           >
             <Send className="w-4 h-4" />

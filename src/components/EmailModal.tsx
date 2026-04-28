@@ -20,23 +20,42 @@ interface EmailModalProps {
   lead: Lead | null;
 }
 
+const EMAIL_TEMPLATE_STORAGE_KEY = 'crm.last.email.template';
+
 const TEMPLATES = [
   {
-    id: 'quotation',
-    name: 'Standard Response',
+    id: 'inquiry',
+    name: 'Inquiry Response',
     icon: <Quote className="w-4 h-4" />,
-    subject: 'Regarding Your Requirement - AV CORPORATION',
-    body: (name: string, company?: string, product?: string) => `Dear ${name},
+    preview: 'Acknowledge inquiry and confirm receipt.',
+    subject: 'Regarding Your Inquiry',
+    body: `Dear {{name}},
 
-Thank you for your interest in AV CORPORATION.
+Thank you for reaching out. We have received your requirement for {{requirement}}.
+We will contact you shortly.`,
+  },
+  {
+    id: 'follow-up',
+    name: 'Follow-up Email',
+    icon: <Bell className="w-4 h-4" />,
+    preview: 'Gentle follow-up for pending response.',
+    subject: 'Follow-up on Your Requirement',
+    body: `Dear {{name}},
 
-We have received your requirement for ${product || 'your specified products'}. Our team is reviewing the details and will get back to you shortly with a formal quotation.
+Just checking in regarding your requirement for {{requirement}}.
+Looking forward to your response.`,
+  },
+  {
+    id: 'quotation',
+    name: 'Quotation Email',
+    icon: <FileText className="w-4 h-4" />,
+    preview: 'Share quotation and ask for clarifications.',
+    subject: 'Quotation for Your Requirement',
+    body: `Dear {{name}},
 
-In the meantime, feel free to reply to this email if you have any questions.
-
-Best Regards,
-Team AV CORPORATION`
-  }
+Please find the quotation for your requirement: {{requirement}}.
+Let us know if you need any clarification.`,
+  },
 ];
 
 const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, lead }) => {
@@ -46,11 +65,27 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, lead }) => {
 
   useEffect(() => {
     if (isOpen && lead) {
-      applyTemplate('quotation');
+      const lastTemplate = localStorage.getItem(EMAIL_TEMPLATE_STORAGE_KEY);
+      const validTemplate = TEMPLATES.find((t) => t.id === lastTemplate);
+      applyTemplate(validTemplate?.id || 'inquiry');
     }
   }, [isOpen, lead]);
 
   if (!lead) return null;
+
+  const getLeadRequirement = () => {
+    if (!lead) return 'your requirement';
+    const explicitRequirement = (lead as any)?.requirement || (lead as any)?.product;
+    if (explicitRequirement && String(explicitRequirement).trim()) return String(explicitRequirement).trim();
+    if (lead.products && lead.products.length > 0 && lead.products[0]?.name) return lead.products[0].name;
+    return 'your requirement';
+  };
+
+  const resolveTemplateBody = (templateBody: string) => {
+    return templateBody
+      .replace(/{{name}}/g, (lead?.name || '').trim() || 'Customer')
+      .replace(/{{requirement}}/g, getLeadRequirement());
+  };
 
   const handleSend = () => {
     if (!lead.email) {
@@ -59,7 +94,7 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, lead }) => {
     }
 
     const mailtoUrl = `mailto:${lead.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-    window.location.href = mailtoUrl;
+    window.open(mailtoUrl, '_blank');
     toast.success('Email client opened');
     onClose();
   };
@@ -69,7 +104,8 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, lead }) => {
     if (template) {
       setSelectedTemplate(templateId);
       setSubject(template.subject);
-      setMessage(template.body(lead.name, lead.companyName, lead.product));
+      setMessage(resolveTemplateBody(template.body));
+      localStorage.setItem(EMAIL_TEMPLATE_STORAGE_KEY, templateId);
     }
   };
 
@@ -103,10 +139,16 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, lead }) => {
                       : "border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900/40"
                   )}
                 >
+                  <span className="mr-1.5">{template.icon}</span>
                   {template.name}
                 </Button>
               ))}
             </div>
+            {selectedTemplate && (
+              <p className="text-[11px] text-slate-500 px-1">
+                {TEMPLATES.find((t) => t.id === selectedTemplate)?.preview}
+              </p>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -142,6 +184,7 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, lead }) => {
           </Button>
           <Button 
             onClick={handleSend} 
+            disabled={!lead?.email}
             className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl px-10 h-12 font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-600/20 transition-all active:scale-[0.98] flex items-center gap-3"
           >
             <Send className="w-4 h-4" />
