@@ -131,6 +131,7 @@ import {
 } from '../components/ui/popover';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { toast } from 'sonner';
+import { apiFetch, ApiRequestError } from '../services/apiClient';
 import WhatsAppModal from '../components/WhatsAppModal';
 import EmailModal from '../components/EmailModal';
 import StatusSelector from '../components/StatusSelector';
@@ -934,16 +935,11 @@ const Leads: React.FC = () => {
     if (!singlePasteData.trim()) return;
     
     try {
-      const response = await fetch('/api/leads/add-single', {
+      const response = await apiFetch('/api/leads/add-single', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rawData: singlePasteData })
       });
-      
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Failed to parse lead');
-      }
       
       const { lead, format, message } = await response.json();
       setSinglePastePreview(lead);
@@ -952,7 +948,11 @@ const Leads: React.FC = () => {
         toast.info(message);
       }
     } catch (error: any) {
-      toast.error(error.message || 'Invalid format');
+      if (error instanceof ApiRequestError && error.status === 401) {
+        toast.error('Session verification failed for this request. Please retry.');
+      } else {
+        toast.error(error.message || 'Invalid format');
+      }
       setSinglePastePreview(null);
     }
   };
@@ -995,18 +995,20 @@ const Leads: React.FC = () => {
     if (!importRawData.trim()) return;
     
     try {
-      const response = await fetch('/api/leads/import-bulk', {
+      const response = await apiFetch('/api/leads/import-bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rawData: importRawData })
       });
-      
-      if (!response.ok) throw new Error('Failed to parse data');
-      
+
       const data = await response.json();
       setImportPreview(data.leads);
-    } catch (error) {
-      toast.error('Failed to parse data from server');
+    } catch (error: any) {
+      if (error instanceof ApiRequestError && error.status === 401) {
+        toast.error('Session verification failed for this request. Please retry.');
+      } else {
+        toast.error(error.message || 'Failed to parse data from server');
+      }
     }
   };
 
