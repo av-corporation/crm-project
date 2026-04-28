@@ -68,19 +68,12 @@ const Login: React.FC = () => {
     setGeneralError('');
     
     try {
-      const userProfile = await signIn(identifier, password);
-      console.log('Login success:', userProfile.uid);
-      
+      await signIn(identifier, password);
       toast.success('Login successful! Redirecting...');
-      
-      // The useEffect will handle redirection once profile is updated in AuthContext
-      // However, we can also trigger a navigate here as a backup
-      const targetPath = userProfile.role === 'admin' ? '/dashboard' : '/leads';
-      navigate(targetPath);
-
     } catch (error: any) {
       console.error('Login error:', error);
       setGeneralError(error.message || 'Invalid username or password');
+    } finally {
       setLoading(false);
     }
   };

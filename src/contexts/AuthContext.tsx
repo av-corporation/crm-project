@@ -1,8 +1,19 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { collection, query, where, getDocs, doc, onSnapshot, setDoc, getDoc, updateDoc } from 'firebase/firestore';
-import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { collection, query, where, getDocs, doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { UserProfile, UserRole } from '../types/crm';
+import {
+  clearStoredSessionUser,
+  ensureAuthPersistence,
+  readStoredSessionUser,
+  validateFirebaseSession,
+  writeStoredSessionUser,
+} from '../services/authSession';
 
 interface AuthContextType {
   user: { uid: string; email: string } | null;
@@ -10,6 +21,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (identifier: string, password: string) => Promise<UserProfile>;
   logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   isAdmin: boolean;
   isManager: boolean;
 }
@@ -20,6 +32,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<{ uid: string; email: string } | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const profileUnsubscribeRef = useRef<(() => void) | null>(null);
+
+  const clearSessionState = () => {
+    if (profileUnsubscribeRef.current) {
+      profileUnsubscribeRef.current();
+      profileUnsubscribeRef.current = null;
+    }
+    setUser(null);
+    setProfile(null);
+    clearStoredSessionUser();
+  };
+
+  const subscribeProfile = (uid: string) => {
+    if (profileUnsubscribeRef.current) {
+      profileUnsubscribeRef.current();
+    }
+
+    profileUnsubscribeRef.current = onSnapshot(
+      doc(db, 'users', uid),
+      (snapshot) => {
+        setProfile(snapshot.exists() ? (snapshot.data() as UserProfile) : null);
+      },
+      (error) => {
+        console.error('Profile sync error:', error);
+      },
+    );
+  };
+
+  const refreshProfile = async () => {
+    const uid = auth.currentUser?.uid || user?.uid;
+    if (!uid) return;
+
+    const profileDoc = await getDoc(doc(db, 'users', uid));
+    if (profileDoc.exists()) {
+      setProfile(profileDoc.data() as UserProfile);
+    }
+  };
 
   // Auto-seed default admin if needed (Firestore only)
   const seedAdmin = async (currentAuthUser?: { uid: string, email: string }): Promise<UserProfile | null> => {
@@ -92,83 +141,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // 1. Initial State Hybrid: Check LocalStorage for fast hydration
-    const savedUser = localStorage.getItem('user');
-    let snapshotUnsubscribe: (() => void) | null = null;
-
-    if (savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser);
-        setUser(parsedUser);
-        
-        // Start profile sync immediately if we have a saved user
-        snapshotUnsubscribe = onSnapshot(doc(db, 'users', parsedUser.uid), (snapshot) => {
-          if (snapshot.exists()) {
-            setProfile(snapshot.data() as UserProfile);
-          } else {
-            console.warn("Cached user profile not found in DB");
-          }
-          setLoading(false);
-        }, (error) => {
-          console.error("Hydration profile sync error:", error);
-          setLoading(false);
-        });
-      } catch (e) {
-        console.error("Failed to parse cached user:", e);
-        localStorage.removeItem('user');
-      }
+    const hydratedUser = readStoredSessionUser();
+    if (hydratedUser) {
+      setUser(hydratedUser);
+      subscribeProfile(hydratedUser.uid);
     }
 
-    // 2. Real-time Auth State Synchronizer
-    const authUnsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log('Auth state change:', firebaseUser?.uid);
-      
-      if (firebaseUser) {
-        const userData = { uid: firebaseUser.uid, email: firebaseUser.email || '' };
-        setUser(userData);
-        localStorage.setItem('user', JSON.stringify(userData));
-        
-        // Ensure profile is synced
-        if (snapshotUnsubscribe) snapshotUnsubscribe();
-        
-        snapshotUnsubscribe = onSnapshot(doc(db, 'users', firebaseUser.uid), (snapshot) => {
-          if (snapshot.exists()) {
-            setProfile(snapshot.data() as UserProfile);
-          } else {
-            console.warn("Authenticated user profile not found in DB");
-          }
-          setLoading(false);
-        }, (error) => {
-          console.error("Authenticated profile sync error:", error);
-          setLoading(false);
-        });
+    ensureAuthPersistence().catch((error) => {
+      console.error('Failed to set auth persistence:', error);
+    });
 
-        // Seed admin if it's the primary email
-        if (firebaseUser.email === 'office.avcorporation@gmail.com') {
-          seedAdmin(userData);
-        }
-      } else {
-        // Logged out
-        if (snapshotUnsubscribe) snapshotUnsubscribe();
-        setUser(null);
-        setProfile(null);
-        localStorage.removeItem('user');
+    const authUnsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        clearSessionState();
         setLoading(false);
+        return;
+      }
+
+      try {
+        const validation = await validateFirebaseSession(firebaseUser);
+        if (!validation.valid || !validation.sessionUser) {
+          await signOut(auth);
+          clearSessionState();
+          setLoading(false);
+          return;
+        }
+
+        const nextUser = validation.sessionUser;
+        setUser(nextUser);
+        writeStoredSessionUser(nextUser);
+        subscribeProfile(firebaseUser.uid);
+
+        if (firebaseUser.email === 'office.avcorporation@gmail.com') {
+          seedAdmin(nextUser);
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Token validation failed:', error);
+        await signOut(auth).catch(() => undefined);
+        clearSessionState();
+        setLoading(false);
+        return;
       }
     });
 
-    // 3. Failsafe: Ensure loading always turns off after 5 seconds max
-    const failsafe = setTimeout(() => {
-      setLoading(prevState => {
-        if (prevState) console.warn("Auth loading failsafe triggered");
-        return false;
-      });
-    }, 5000);
-
     return () => {
-      if (snapshotUnsubscribe) snapshotUnsubscribe();
+      if (profileUnsubscribeRef.current) {
+        profileUnsubscribeRef.current();
+        profileUnsubscribeRef.current = null;
+      }
       authUnsubscribe();
-      clearTimeout(failsafe);
     };
   }, []);
 
@@ -189,21 +212,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         console.log('Internal: Start signIn sequence');
         
-        // Admin Master Access Failsafe
-        const isTryingAdmin = trimmedIdentifier.toLowerCase() === 'admin' || trimmedIdentifier.toLowerCase() === 'office.avcorporation@gmail.com';
-        if (isTryingAdmin && (trimmedPassword === '123456' || trimmedPassword === 'admin')) {
-          console.log('Internal: Admin master access');
-          const admin = await seedAdmin();
-          if (admin) {
-            const authUser = { uid: admin.uid, email: admin.email || '' };
-            setUser(authUser);
-            setProfile(admin);
-            localStorage.setItem('user', JSON.stringify(authUser));
-            clearTimeout(timeout);
-            return resolve(admin);
-          }
-        }
-
         let emailToUse = trimmedIdentifier;
         let foundUser: UserProfile | null = null;
         const isEmail = trimmedIdentifier.includes('@');
@@ -267,24 +275,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             foundUser = newProfile;
           }
 
-          setUser(authUser);
-          setProfile(foundUser);
-          localStorage.setItem('user', JSON.stringify(authUser));
           clearTimeout(timeout);
           return resolve(foundUser);
         } catch (firebaseError: any) {
           console.log('Internal: Firebase Auth error:', firebaseError.code);
-          // 2. Fallback to Firestore check
-          if (foundUser && foundUser.password === trimmedPassword) {
-            console.log('Internal: DB Fallback success');
-            const authUser = { uid: foundUser.uid, email: foundUser.email || '' };
-            setUser(authUser);
-            setProfile(foundUser);
-            localStorage.setItem('user', JSON.stringify(authUser));
-            clearTimeout(timeout);
-            return resolve(foundUser);
-          }
-          
+
           clearTimeout(timeout);
           if (firebaseError.code === 'auth/user-not-found') {
             return reject(new Error('User not registered. Please signup first.'));
@@ -307,16 +302,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.error("Signout error:", e);
     }
-    setUser(null);
-    setProfile(null);
-    localStorage.removeItem('user');
+    clearSessionState();
   };
 
   const isAdmin = profile?.role === 'admin';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, logout, isAdmin, isManager }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, logout, refreshProfile, isAdmin, isManager }}>
       {children}
     </AuthContext.Provider>
   );

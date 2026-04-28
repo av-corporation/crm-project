@@ -16,11 +16,11 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Lead, Note, ActivityLog, Product, LeadStatus, UserProfile, StatusConfig, UserRole, Task } from '../types/crm';
+import { getSessionUser } from './authSession';
 
 // Error handling helper
 const handleFirestoreError = (error: any, operation: string, path: string) => {
-  const savedUser = localStorage.getItem('user');
-  const currentUser = savedUser ? JSON.parse(savedUser) : null;
+  const currentUser = getCurrentUser();
   
   const errInfo = {
     error: error.message,
@@ -36,8 +36,7 @@ const handleFirestoreError = (error: any, operation: string, path: string) => {
 };
 
 const getCurrentUser = () => {
-  const savedUser = localStorage.getItem('user');
-  return savedUser ? JSON.parse(savedUser) : null;
+  return getSessionUser();
 };
 
 // Product Name Mapping
@@ -115,9 +114,8 @@ export const subscribeLeads = (callback: (leads: Lead[]) => void, role: string, 
 
 export const createLead = async (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => {
   try {
-    const user = auth.currentUser || getCurrentUser();
+    const user = getCurrentUser();
     if (!user) {
-      window.location.href = '/login';
       throw new Error('User not authenticated');
     }
 
