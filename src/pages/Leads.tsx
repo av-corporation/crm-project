@@ -705,12 +705,34 @@ const Leads: React.FC = () => {
     }
   };
 
+  const getLeadRequirementText = (lead: Lead) => {
+    const explicitRequirement = (lead as any)?.requirement || (lead as any)?.product;
+    if (explicitRequirement && String(explicitRequirement).trim()) return String(explicitRequirement).trim();
+    if (lead.products && lead.products.length > 0 && lead.products[0]?.name) return lead.products[0].name;
+    return 'your requirement';
+  };
+
   const handleEmail = (lead: Lead) => {
     if (!lead?.email) {
       toast.error('No email address provided');
       return;
     }
-    window.open(`mailto:${lead.email}`, '_blank');
+
+    const safeName = (lead?.name || '').trim() || 'Customer';
+    const safeRequirement = getLeadRequirementText(lead);
+    const subject = 'Regarding Your Inquiry - A V Corporation';
+    const body = `Dear ${safeName},
+
+Thank you for reaching out to A V Corporation.
+We have received your requirement for ${safeRequirement}.
+
+Our team will connect with you shortly.
+
+Best Regards,
+A V Corporation`;
+
+    const mailtoUrl = `mailto:${lead.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailtoUrl, '_blank');
   };
 
   const handleWhatsAppFollowUp = (lead: Lead) => {
@@ -718,8 +740,20 @@ const Leads: React.FC = () => {
       toast.error('No phone number provided');
       return;
     }
-    const cleanPhone = lead.phone.replace(/\D/g, "");
-    window.open(`https://wa.me/${cleanPhone}?text=Hello`, '_blank');
+
+    const safeName = (lead?.name || '').trim() || 'Customer';
+    const safeRequirement = getLeadRequirementText(lead);
+    const cleanPhone = lead.phone.replace(/\D/g, '');
+    const message = `Hi ${safeName},
+Thank you for contacting A V Corporation.
+We have received your requirement for ${safeRequirement}.
+Our team will get back to you shortly.
+
+Regards,
+A V Corporation`;
+    const encodedMessage = encodeURIComponent(message);
+
+    window.open(`https://wa.me/${cleanPhone}?text=${encodedMessage}`, '_blank');
   };
 
   const handleCreateProduct = async () => {
