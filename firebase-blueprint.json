@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user with role-based access",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Sales lead tracking",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "companyName": { "type": "string" },
+        "city": { "type": "string" },
+        "product": { "type": "string" },
+        "status": { "type": "string", "enum": ["Not Called", "Call Done", "Interested", "Follow-up Needed", "Deal Done"] },
+        "createdBy": { "type": "string", "description": "User UID" },
+        "assignedTo": { "type": "string", "description": "User UID" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone", "status", "createdAt"]
+    },
+    "Note": {
+      "title": "Note",
+      "description": "Lead notes and follow-ups",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "note": { "type": "string" },
+        "followUpDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["leadId", "createdBy", "note", "createdAt"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Tasks assigned to users for leads",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High"] },
+        "status": { "type": "string", "enum": ["pending", "completed"] },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["leadId", "assignedTo", "title", "status", "priority", "createdAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Audit log of actions",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "leadId": { "type": "string" },
+        "action": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "action", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles" },
+    "/leads/{leadId}": { "schema": "Lead", "description": "Sales leads" },
+    "/notes/{noteId}": { "schema": "Note", "description": "Lead notes" },
+    "/tasks/{taskId}": { "schema": "Task", "description": "Lead tasks" },
+    "/activity_log/{logId}": { "schema": "ActivityLog", "description": "Global activity log" }
+  }
+}

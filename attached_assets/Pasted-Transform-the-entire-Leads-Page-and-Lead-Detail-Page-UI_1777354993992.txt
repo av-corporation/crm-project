@@ -1,0 +1,151 @@
+Transform the entire Leads Page and Lead Detail Page UI into a premium, clean, modern CRM layout inspired by NexusCRM / HubSpot / Zoho — BUT KEEP LIGHT THEME (white background, not dark).
+
+🎯 DESIGN SYSTEM (IMPORTANT)
+- Background: pure white (#FFFFFF)
+- Cards: soft white with subtle shadow (box-shadow: 0 4px 20px rgba(0,0,0,0.05))
+- Borders: very light (#EAEAEA)
+- Primary color: #5B3FFF (purple gradient allowed)
+- Text:
+  - Headings: #111827 (bold)
+  - Subtext: #6B7280
+- Font: Inter / Poppins (consistent everywhere)
+- Border radius: 12px–16px
+- Spacing: clean, breathable (padding 16–24px)
+
+--------------------------------------------------
+
+📊 LEADS PAGE (TABLE STYLE LIKE IMAGE)
+
+Convert leads list into structured horizontal table rows:
+
+Each row must contain:
+
+[Checkbox]  
+[Avatar Circle with initials]  
+[Lead Name (Bold)]  
+[Phone + Email (stacked vertically)]  
+[Location (City, State)]  
+[Requirement (tag style badge)]  
+[Status (dropdown pill)]  
+[Source (icon + text e.g. IndiaMART)]  
+[Assigned User (avatar + name)]  
+[Action Buttons (Call | WhatsApp | Email | View)]
+
+🧠 UX IMPROVEMENTS:
+- Entire row clickable → opens lead detail page
+- Hover effect → slight shadow + highlight
+- Status dropdown WORKING (New / Contacted / Follow-up / Closed)
+- Actions buttons WORKING
+
+--------------------------------------------------
+
+🔍 FILTER + SEARCH BAR
+
+Top section must include:
+- Search bar (full width)
+- Filters:
+  - Status filter
+  - Source filter
+  - Assigned user filter
+- “Clear Filters” button
+- “Add New Lead” (primary button right side)
+
+--------------------------------------------------
+
+👤 LEAD DETAIL PAGE (LIKE SECOND IMAGE)
+
+TOP HEADER:
+
+[Large Avatar]  Lead Name (BIG BOLD)
+Tag: Individual / Company (DYNAMIC)
+
+Below:
+- Location
+- Created date
+- Source
+
+RIGHT SIDE ACTION BUTTONS:
+- Call (outline)
+- WhatsApp (green filled)
+- Email (outline)
+- 3-dot menu
+
+--------------------------------------------------
+
+📂 TABS SECTION (IMPORTANT)
+
+Tabs:
+- Overview
+- Activity
+- Notes
+- Files
+
+👉 Only selected tab content should show (others hidden)
+
+--------------------------------------------------
+
+📝 NOTES TAB (FIX REQUIRED)
+
+- Show ONLY notes section (no extra data)
+- Large input box: “Add a note…”
+- Buttons:
+  - Add Note
+  - Schedule Follow-up
+- Notes list below (timeline style)
+
+--------------------------------------------------
+
+📋 RIGHT SIDE PANEL
+
+Card 1: Contact Info
+- Name
+- Phone
+- Email
+- Company (if exists)
+
+Card 2: Lead Details
+- Requirement
+- Status
+- Source
+- Assigned user
+
+--------------------------------------------------
+
+⚙️ FUNCTIONAL FIXES (VERY IMPORTANT)
+
+- Clicking lead → MUST open detail page
+- Status dropdown must update state
+- All buttons must work:
+  - Call
+  - WhatsApp
+  - Email
+  - Edit
+- No blank white screen errors
+- Safe rendering:
+  - Handle undefined/null data
+  - Use optional chaining everywhere
+
+--------------------------------------------------
+
+🧠 DYNAMIC LOGIC FIX
+
+IF company exists:
+→ show company name instead of "Individual"
+
+ELSE:
+→ show "Individual"
+
+--------------------------------------------------
+
+✨ FINAL OUTPUT
+
+- Clean white premium CRM UI
+- Same structure across dashboard, leads, details
+- No broken buttons
+- No UI mismatch
+- Fully functional layout
+- Pixel-perfect spacing like modern SaaS CRM
+
+DO NOT USE DARK THEME.
+DO NOT BREAK EXISTING FEATURES.
+JUST UPGRADE UI + FIX LOGIC + IMPROVE UX.
