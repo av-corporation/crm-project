@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import {
+  fetchSignInMethodsForEmail,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
@@ -198,6 +199,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (identifier: string, password: string): Promise<UserProfile> => {
     const trimmedIdentifier = identifier.trim();
     const trimmedPassword = password.trim();
+    const normalizedIdentifier = trimmedIdentifier.toLowerCase();
+    const isEmailIdentifier = normalizedIdentifier.includes('@');
+    const isMobileIdentifier = /^\d+$/.test(trimmedIdentifier);
 
     if (!trimmedIdentifier || !trimmedPassword) {
       throw new Error('Please fill all details');
@@ -212,42 +216,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         console.log('Internal: Start signIn sequence');
         
-        let emailToUse = trimmedIdentifier;
+        let emailToUse = isEmailIdentifier ? normalizedIdentifier : '';
         let foundUser: UserProfile | null = null;
-        const isEmail = trimmedIdentifier.includes('@');
-        const isMobile = /^\d+$/.test(trimmedIdentifier);
 
         // Search Firestore for the user
         let q;
-        if (isEmail) {
-          q = query(collection(db, 'users'), where('email', '==', trimmedIdentifier.toLowerCase()));
-        } else if (isMobile) {
+        if (isEmailIdentifier) {
+          q = query(collection(db, 'users'), where('email', '==', normalizedIdentifier));
+        } else if (isMobileIdentifier) {
           q = query(collection(db, 'users'), where('mobile', '==', trimmedIdentifier));
         } else {
-          q = query(collection(db, 'users'), where('username', '==', trimmedIdentifier.toLowerCase()));
+          q = query(collection(db, 'users'), where('username', '==', normalizedIdentifier));
         }
 
-        console.log('Internal: Searching Firestore');
+        console.log('[Auth] Sign-in attempt started', {
+          identifierType: isEmailIdentifier ? 'email' : isMobileIdentifier ? 'mobile' : 'username',
+          identifierPreview: isEmailIdentifier ? normalizedIdentifier : `${trimmedIdentifier.slice(0, 3)}***`,
+        });
+
+        console.log('[Auth] Searching Firestore profile by identifier');
         const snapshot = await getDocs(q);
         if (!snapshot.empty) {
           foundUser = snapshot.docs[0].data() as UserProfile;
-          emailToUse = foundUser.email || '';
-          console.log('Internal: User found in DB');
-        } else if (!isEmail) {
-          console.log('Internal: User not registered');
+          emailToUse = (foundUser.email || '').trim().toLowerCase();
+          console.log('[Auth] User profile found', {
+            uid: foundUser.uid,
+            hasEmail: !!emailToUse,
+          });
+        } else if (!isEmailIdentifier) {
+          console.log('[Auth] User profile not found');
           clearTimeout(timeout);
           return reject(new Error('User not registered. Please contact your administrator.'));
         } else {
-          emailToUse = trimmedIdentifier.toLowerCase();
-          console.log('Internal: Using identifier as email');
+          emailToUse = normalizedIdentifier;
+          console.log('[Auth] Using identifier email directly');
+        }
+
+        if (!emailToUse) {
+          clearTimeout(timeout);
+          return reject(
+            new Error('Your profile is missing an email. Please contact admin to add a valid login email.'),
+          );
         }
 
         // 1. Try Firebase Authentication
         try {
-          console.log('Internal: Firebase Auth attempt');
+          console.log('[Auth] Firebase password auth request', {
+            email: emailToUse,
+          });
           const userCredential = await signInWithEmailAndPassword(auth, emailToUse, trimmedPassword);
           const authUser = { uid: userCredential.user.uid, email: userCredential.user.email! };
-          console.log('Internal: Firebase Auth success');
+          console.log('[Auth] Firebase auth success', {
+            uid: authUser.uid,
+            email: authUser.email,
+          });
           
           if (!foundUser) {
             const profileDoc = await getDoc(doc(db, 'users', authUser.uid));
@@ -262,7 +284,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           if (!foundUser) {
-            console.log('Internal: Creating default profile');
+            console.log('[Auth] Creating default profile from Firebase user');
             const newProfile: UserProfile = {
               uid: authUser.uid,
               email: authUser.email,
@@ -278,18 +300,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           clearTimeout(timeout);
           return resolve(foundUser);
         } catch (firebaseError: any) {
-          console.log('Internal: Firebase Auth error:', firebaseError.code);
+          const errorCode = firebaseError?.code || 'auth/unknown';
+          console.error('[Auth] Firebase auth error', {
+            code: errorCode,
+            message: firebaseError?.message || '',
+            email: emailToUse,
+          });
 
           clearTimeout(timeout);
-          if (firebaseError.code === 'auth/user-not-found') {
+          if (errorCode === 'auth/user-not-found') {
             return reject(new Error('User not registered. Please signup first.'));
-          } else if (firebaseError.code === 'auth/wrong-password') {
+          } else if (errorCode === 'auth/wrong-password') {
             return reject(new Error('Incorrect password. Please try again.'));
+          } else if (errorCode === 'auth/invalid-credential') {
+            if (emailToUse.includes('@')) {
+              try {
+                const methods = await fetchSignInMethodsForEmail(auth, emailToUse);
+                console.warn('[Auth] Enabled sign-in methods for email', {
+                  email: emailToUse,
+                  methods,
+                });
+              } catch (methodsError) {
+                console.warn('[Auth] Could not fetch sign-in methods', methodsError);
+              }
+            }
+            return reject(
+              new Error(
+                'Login failed due to invalid credentials or Firebase Email/Password provider setup. Please verify Firebase Auth settings and account email.',
+              ),
+            );
+          } else if (errorCode === 'auth/invalid-email') {
+            return reject(new Error('This account has an invalid email format. Please contact admin.'));
           }
-          return reject(new Error('Authentication failed: ' + (firebaseError.message || 'Unknown error')));
+          return reject(new Error('Authentication failed. Please try again.'));
         }
       } catch (error: any) {
-        console.error('Internal: Global signIn error:', error);
+        console.error('[Auth] Global signIn error:', error);
         clearTimeout(timeout);
         reject(error);
       }
