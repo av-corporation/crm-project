@@ -33,6 +33,17 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Load Remember Me preference
+    const savedRememberMe = localStorage.getItem('rememberMe') === 'true';
+    const savedIdentifier = localStorage.getItem('lastIdentifier');
+    
+    if (savedRememberMe && savedIdentifier) {
+      setRememberMe(true);
+      setIdentifier(savedIdentifier);
+    }
+  }, []);
+
+  useEffect(() => {
     if (profile?.mustChangePassword) {
       setShowPasswordChange(true);
     } else if (user && profile) {
@@ -68,7 +79,17 @@ const Login: React.FC = () => {
     setGeneralError('');
     
     try {
-      await signIn(identifier, password);
+      const profile = await signIn(identifier, password);
+      
+      // Save Remember Me preference
+      if (rememberMe) {
+        localStorage.setItem('rememberMe', 'true');
+        localStorage.setItem('lastIdentifier', identifier);
+      } else {
+        localStorage.removeItem('rememberMe');
+        localStorage.removeItem('lastIdentifier');
+      }
+      
       toast.success('Login successful! Redirecting...');
     } catch (error: any) {
       console.error('Login error:', error);

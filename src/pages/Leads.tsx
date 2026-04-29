@@ -281,6 +281,32 @@ const Leads: React.FC = () => {
   const [requirementFilter, setRequirementFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{from: string, to: string}>({from: '', to: ''});
   
+  // Advanced Filter System
+  interface AdvancedFilter {
+    id: string;
+    field: string;
+    operator: 'contains' | 'equals' | 'startsWith';
+    value: string;
+  }
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilter[]>([]);
+  
+  const addAdvancedFilter = () => {
+    setAdvancedFilters([...advancedFilters, {
+      id: Date.now().toString(),
+      field: 'name',
+      operator: 'contains',
+      value: ''
+    }]);
+  };
+  
+  const removeAdvancedFilter = (id: string) => {
+    setAdvancedFilters(advancedFilters.filter(f => f.id !== id));
+  };
+  
+  const updateAdvancedFilter = (id: string, updates: Partial<AdvancedFilter>) => {
+    setAdvancedFilters(advancedFilters.map(f => f.id === id ? { ...f, ...updates } : f));
+  };
+  
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [sortField, setSortField] = useState<keyof Lead>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -946,24 +972,48 @@ const Leads: React.FC = () => {
     if (!singlePasteData.trim()) return;
     
     try {
-      const response = await apiFetch('/api/leads/add-single', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawData: singlePasteData })
-      });
+      // Parse the single paste data locally
+      const lines = singlePasteData.trim().split('\n');
+      const firstLine = lines[0].trim();
       
-      const { lead, format, message } = await response.json();
+      // Detect format (TAB or SPACE separated)
+      let format = 'TAB';
+      let parts: string[] = [];
+      
+      if (firstLine.includes('\t')) {
+        parts = firstLine.split('\t').map(p => p.trim());
+        format = 'TAB';
+      } else {
+        // Multiple spaces separated
+        parts = firstLine.split(/\s{2,}/).map(p => p.trim());
+        if (parts.length < 2) {
+          parts = firstLine.split(' ').filter(p => p.trim()).map(p => p.trim());
+        }
+        format = 'SPACE';
+      }
+      
+      // Parse based on IndiaMART format (typically: Name, Phone, Company, City, Product, Contact)
+      const lead = {
+        name: parts[0] || '',
+        phone: (parts[1] || '').replace(/\D/g, '').slice(-10),
+        companyName: parts[2] || '',
+        city: parts[3] || '',
+        product: parts[4] || '',
+        email: parts[5] || '',
+        note: parts[6] || '',
+        status: 'New',
+        source: 'IndiaMART',
+        priority: 'Warm',
+        products: parts[4] ? [{ name: parts[4], quantity: 1 }] : []
+      };
+      
       setSinglePastePreview(lead);
       setSinglePasteFormat(format);
       if (format === 'SPACE') {
-        toast.info(message);
+        toast.info('Detected SPACE-separated format');
       }
     } catch (error: any) {
-      if (error instanceof ApiRequestError && error.status === 401) {
-        toast.error('Session verification failed for this request. Please retry.');
-      } else {
-        toast.error(error.message || 'Invalid format');
-      }
+      toast.error(error.message || 'Invalid format');
       setSinglePastePreview(null);
     }
   };
@@ -1006,20 +1056,43 @@ const Leads: React.FC = () => {
     if (!importRawData.trim()) return;
     
     try {
-      const response = await apiFetch('/api/leads/import-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawData: importRawData })
+      // Parse bulk import data locally
+      const lines = importRawData.trim().split('\n').filter(l => l.trim());
+      const leads = lines.map((line) => {
+        const parts = line.includes('\t') 
+          ? line.split('\t').map(p => p.trim())
+          : line.split(/\s{2,}/).map(p => p.trim()).length > 1
+            ? line.split(/\s{2,}/).map(p => p.trim())
+            : line.split(' ').filter(p => p.trim()).map(p => p.trim());
+        
+        const name = parts[0] || '';
+        const phone = (parts[1] || '').replace(/\D/g, '').slice(-10);
+        const companyName = parts[2] || '';
+        const city = parts[3] || '';
+        const product = parts[4] || '';
+        const email = parts[5] || '';
+        
+        const isValid = name.trim().length > 0 && phone.length === 10;
+        
+        return {
+          name,
+          phone,
+          companyName,
+          city,
+          product,
+          email,
+          status: 'New',
+          source: 'IndiaMART',
+          priority: 'Warm',
+          products: product ? [{ name: product, quantity: 1 }] : [],
+          isValid,
+          error: isValid ? '' : 'Missing name or invalid phone'
+        };
       });
-
-      const data = await response.json();
-      setImportPreview(data.leads);
+      
+      setImportPreview(leads);
     } catch (error: any) {
-      if (error instanceof ApiRequestError && error.status === 401) {
-        toast.error('Session verification failed for this request. Please retry.');
-      } else {
-        toast.error(error.message || 'Failed to parse data from server');
-      }
+      toast.error(error.message || 'Failed to parse data');
     }
   };
 
@@ -1199,7 +1272,44 @@ const Leads: React.FC = () => {
       }
     }
     
-    return matchesSearch && matchesStatus && matchesCity && matchesSource && matchesTag && matchesPriority && matchesDate && matchesAssigned && matchesRequirement;
+    // Advanced filters
+    let matchesAdvanced = true;
+    for (const filter of advancedFilters) {
+      let fieldValue = '';
+      
+      if (filter.field === 'name') fieldValue = lead.name || '';
+      else if (filter.field === 'phone') fieldValue = lead.phone || '';
+      else if (filter.field === 'email') fieldValue = lead.email || '';
+      else if (filter.field === 'company') fieldValue = lead.companyName || '';
+      else if (filter.field === 'city') fieldValue = lead.city || '';
+      else if (filter.field === 'location') fieldValue = lead.city || lead.address || '';
+      else if (filter.field === 'requirement') fieldValue = (lead.products || []).map(p => p.name).join(', ');
+      else if (filter.field === 'status') fieldValue = lead.status || '';
+      else if (filter.field === 'source') fieldValue = lead.source || '';
+      else if (filter.field === 'createdBy') fieldValue = getUserName(lead.createdBy, users) || '';
+      
+      const searchValue = filter.value.toLowerCase();
+      const fieldValueLower = fieldValue.toLowerCase();
+      
+      if (filter.operator === 'contains') {
+        if (!fieldValueLower.includes(searchValue)) {
+          matchesAdvanced = false;
+          break;
+        }
+      } else if (filter.operator === 'equals') {
+        if (fieldValueLower !== searchValue) {
+          matchesAdvanced = false;
+          break;
+        }
+      } else if (filter.operator === 'startsWith') {
+        if (!fieldValueLower.startsWith(searchValue)) {
+          matchesAdvanced = false;
+          break;
+        }
+      }
+    }
+    
+    return matchesSearch && matchesStatus && matchesCity && matchesSource && matchesTag && matchesPriority && matchesDate && matchesAssigned && matchesRequirement && matchesAdvanced;
   });
 
   const sortedLeads = [...filteredLeads].sort((a, b) => {
@@ -1964,7 +2074,7 @@ const Leads: React.FC = () => {
               </PopoverContent>
             </Popover>
 
-            {(searchTerm || statusFilter !== 'all' || cityFilter !== 'all' || sourceFilter !== 'all' || tagFilter !== 'all' || dateRange.from || assignedUserFilter !== 'all' || requirementFilter !== 'all') && (
+            {(searchTerm || statusFilter !== 'all' || cityFilter !== 'all' || sourceFilter !== 'all' || tagFilter !== 'all' || dateRange.from || assignedUserFilter !== 'all' || requirementFilter !== 'all' || advancedFilters.length > 0) && (
               <Button 
                 variant="ghost"
                 className="h-10 px-4 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all"
@@ -1978,12 +2088,81 @@ const Leads: React.FC = () => {
                   setAssignedUserFilter('all');
                   setRequirementFilter('all');
                   setDateRange({from: '', to: ''});
+                  setAdvancedFilters([]);
                 }}
               >
                 Clear All Filters
               </Button>
             )}
           </div>
+        </div>
+
+        {/* Advanced Filter System */}
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-[28px] shadow-sm border border-slate-100 dark:border-white/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">Advanced Filters</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addAdvancedFilter}
+              className="h-9 rounded-lg border-slate-200 dark:border-slate-800 font-bold text-xs gap-2 px-3 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Filter
+            </Button>
+          </div>
+          
+          {advancedFilters.length === 0 ? (
+            <p className="text-xs text-slate-400 italic">No advanced filters yet. Add one to narrow down your search.</p>
+          ) : (
+            <div className="space-y-2">
+              {advancedFilters.map((filter) => (
+                <div key={filter.id} className="flex items-center gap-2">
+                  <Select value={filter.field} onValueChange={(val) => updateAdvancedFilter(filter.id, { field: val })}>
+                    <SelectTrigger className="h-9 rounded-lg border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs font-semibold w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg border-slate-100 dark:border-slate-800 text-xs">
+                      <SelectItem value="name">Name</SelectItem>
+                      <SelectItem value="phone">Phone</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="company">Company</SelectItem>
+                      <SelectItem value="city">City/Location</SelectItem>
+                      <SelectItem value="requirement">Requirement</SelectItem>
+                      <SelectItem value="status">Status</SelectItem>
+                      <SelectItem value="source">Source</SelectItem>
+                      <SelectItem value="createdBy">Created By</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={filter.operator} onValueChange={(val: any) => updateAdvancedFilter(filter.id, { operator: val })}>
+                    <SelectTrigger className="h-9 rounded-lg border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs font-semibold w-[110px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg border-slate-100 dark:border-slate-800 text-xs">
+                      <SelectItem value="contains">Contains</SelectItem>
+                      <SelectItem value="equals">Equals</SelectItem>
+                      <SelectItem value="startsWith">Starts With</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="text"
+                    placeholder="Filter value..."
+                    value={filter.value}
+                    onChange={(e) => updateAdvancedFilter(filter.id, { value: e.target.value })}
+                    className="h-9 rounded-lg border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs font-semibold flex-1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeAdvancedFilter(filter.id)}
+                    className="h-9 w-9 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50/50 dark:hover:bg-rose-900/20"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -3008,15 +3187,15 @@ const Leads: React.FC = () => {
                         )}
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Assigned To</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Lead Created By</p>
                         <div className="flex items-center gap-2">
                           <Avatar className="w-6 h-6 rounded-md">
                             <AvatarFallback className="bg-[#5B3FFF] text-white font-bold text-[10px] rounded-md">
-                              {getUserAvatar(selectedLead?.assignedTo, users)}
+                              {getUserAvatar(selectedLead?.createdBy, users)}
                             </AvatarFallback>
                           </Avatar>
                           <span className="text-[13px] font-semibold text-slate-800 truncate">
-                            {getUserName(selectedLead?.assignedTo, users) || 'Unassigned'}
+                            {getUserName(selectedLead?.createdBy, users) || 'Unknown'}
                           </span>
                         </div>
                       </div>

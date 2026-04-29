@@ -203,17 +203,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               </SheetContent>
             </Sheet>
             
-            {/* Global Search Bar (HubSpot style) */}
-            <div className="hidden lg:flex items-center w-full max-w-lg bg-[#F1F5F9] dark:bg-slate-800 rounded-full px-4 py-2 text-[#94A3B8] border border-transparent focus-within:border-[#4F46E5]/30 focus-within:bg-white dark:focus-within:bg-slate-900 focus-within:ring-2 focus-within:ring-[#4F46E5]/10 transition-all">
-              <BarChart3 className="w-4 h-4 mr-3" />
-              <input 
-                type="text" 
-                placeholder="Search leads or settings..." 
-                className="bg-transparent border-none outline-none text-sm w-full font-medium text-[#0F172A] dark:text-slate-200 placeholder:text-[#94A3B8]"
-              />
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-[#E6EAF0] dark:border-slate-700 ml-2">⌘K</span>
-            </div>
-
             <h1 className="md:hidden text-base font-bold text-slate-900 dark:text-white tracking-tight">
               {filteredNavItems.find(item => item.path === location.pathname)?.name || 'Dashboard'}
             </h1>

@@ -85,12 +85,11 @@ const mapOldStatus = (status: string): string => {
   if (!status) return 'New';
   const s = status.toLowerCase();
   if (s.includes('not called') || s === 'new') return 'New';
-  if (s.includes('call done') || s.includes('contacted') || s.includes('called') || s.includes('interested')) return 'Contacted';
-  if (s.includes('follow-up') || s.includes('scheduled')) return 'Follow-up Scheduled';
-  if (s.includes('deal done') || s.includes('converted') || s.includes('closed')) return 'Deal Done';
-  if (s.includes('lost')) return 'Lost';
   if (s.includes('quotation')) return 'Quotation Sent';
-  return status;
+  if (s.includes('deal done') || s.includes('converted') || s.includes('closed') || s.includes('won')) return 'Deal Done';
+  if (s.includes('no need') || s.includes('lost') || s.includes('declined')) return 'No Need';
+  // Default to the closest match
+  return 'New';
 };
 
 // Leads
@@ -579,11 +578,9 @@ export const seedStatuses = async () => {
 
     const defaultStatuses: Omit<StatusConfig, 'id'>[] = [
       { label: 'New', color: 'blue', order: 1, isDefault: true },
-      { label: 'Contacted', color: 'indigo', order: 2, isDefault: true },
-      { label: 'Follow-up', color: 'amber', order: 3, isDefault: true },
-      { label: 'Qualified', color: 'emerald', order: 4, isDefault: true },
-      { label: 'Converted', color: 'green', order: 5, isDefault: true },
-      { label: 'Closed', color: 'slate', order: 6, isDefault: true },
+      { label: 'Quotation Sent', color: 'indigo', order: 2, isDefault: true },
+      { label: 'Deal Done', color: 'green', order: 3, isDefault: true },
+      { label: 'No Need', color: 'slate', order: 4, isDefault: true },
     ];
 
     const batch = writeBatch(db);
